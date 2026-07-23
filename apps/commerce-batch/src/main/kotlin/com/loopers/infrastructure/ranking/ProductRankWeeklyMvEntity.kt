@@ -1,0 +1,25 @@
+package com.loopers.infrastructure.ranking
+
+import jakarta.persistence.Entity
+import jakarta.persistence.Table
+import jakarta.persistence.UniqueConstraint
+
+@Entity
+@Table(
+    name = "mv_product_rank_weekly",
+    uniqueConstraints = [
+        UniqueConstraint(name = "uk_mv_product_rank_weekly_rank", columnNames = ["period_key", "rank_no"]),
+        UniqueConstraint(name = "uk_mv_product_rank_weekly_product", columnNames = ["period_key", "product_id"]),
+    ],
+)
+class ProductRankWeeklyMvEntity private constructor(
+    periodKey: String,
+    rankNo: Int,
+    productId: Long,
+    score: Double,
+) : ProductRankMvEntity(periodKey, rankNo, productId, score) {
+    companion object {
+        fun of(periodKey: String, rankNo: Int, productId: Long, score: Double): ProductRankWeeklyMvEntity =
+            ProductRankWeeklyMvEntity(periodKey, rankNo, productId, score)
+    }
+}

@@ -22,6 +22,7 @@ import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.context.annotation.Import
 import org.springframework.core.ParameterizedTypeReference
 import org.springframework.data.redis.core.RedisTemplate
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import java.time.LocalDate
@@ -35,6 +36,7 @@ class RankingV1ApiE2ETest @Autowired constructor(
     private val redisCleanUp: RedisCleanUp,
     private val brandRepository: BrandRepository,
     private val productRepository: ProductRepository,
+    private val jdbcTemplate: JdbcTemplate,
     @Qualifier(RedisConfig.REDIS_TEMPLATE_MASTER)
     private val masterTemplate: RedisTemplate<String, String>,
 ) {
@@ -48,6 +50,17 @@ class RankingV1ApiE2ETest @Autowired constructor(
 
     private fun seedScore(productId: Long, score: Double) {
         masterTemplate.opsForZSet().add(todayKey(), productId.toString(), score)
+    }
+
+    private fun seedMv(table: String, periodKey: String, rankNo: Int, productId: Long, score: Double) {
+        jdbcTemplate.update(
+            "INSERT INTO $table (period_key, rank_no, product_id, score, created_at, updated_at) " +
+                "VALUES (?, ?, ?, ?, NOW(6), NOW(6))",
+            periodKey,
+            rankNo,
+            productId,
+            score,
+        )
     }
 
     @Test
@@ -104,6 +117,103 @@ class RankingV1ApiE2ETest @Autowired constructor(
 
         assertThat(response.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
         assertThat(response.body?.meta?.errorCode).isEqualTo("RANKING_BAD_REQUEST")
+    }
+
+    @Test
+    @DisplayName("period 가 잘못된 값이면 400 RANKING_BAD_REQUEST 를 반환한다")
+    fun rejectsUnknownPeriod() {
+        val response = testRestTemplate.exchange(
+            "/api/v1/rankings?period=yearly",
+            HttpMethod.GET,
+            null,
+            object : ParameterizedTypeReference<ApiResponse<RankingV1Dto.RankingsResponse>>() {},
+        )
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(response.body?.meta?.errorCode).isEqualTo("RANKING_BAD_REQUEST")
+    }
+
+    @Test
+    @DisplayName("period 는 대소문자 구분 없이 해석된다 - 소문자 daily 는 기존 일간 조회와 동일하다")
+    fun acceptsLowercasePeriod() {
+        val brandId = brandRepository.save(BrandFixture.validBrand("나이키")).id
+        val product = productRepository.save(ProductFixture.validProduct(name = "A", brandId = brandId)).id
+        seedScore(product, 5.0)
+
+        val response = testRestTemplate.exchange(
+            "/api/v1/rankings?period=daily",
+            HttpMethod.GET,
+            null,
+            object : ParameterizedTypeReference<ApiResponse<RankingV1Dto.RankingsResponse>>() {},
+        )
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(response.body!!.data!!.content.map { it.productId }).containsExactly(product)
+    }
+
+    @Test
+    @DisplayName("period=WEEKLY 는 date 가 속한 주의 MV 에서 상품정보가 조립된 랭킹을 반환한다")
+    fun returnsWeeklyRankingFromMv() {
+        val brandId = brandRepository.save(BrandFixture.validBrand("나이키")).id
+        val first = productRepository.save(ProductFixture.validProduct(name = "A", price = 1000, brandId = brandId)).id
+        val second = productRepository.save(ProductFixture.validProduct(name = "B", price = 2000, brandId = brandId)).id
+        // 2026-07-21 이 속한 ISO 주 = 2026W30
+        seedMv("mv_product_rank_weekly", "2026W30", 1, first, 9.9)
+        seedMv("mv_product_rank_weekly", "2026W30", 2, second, 5.0)
+
+        val response = testRestTemplate.exchange(
+            "/api/v1/rankings?period=WEEKLY&date=20260721",
+            HttpMethod.GET,
+            null,
+            object : ParameterizedTypeReference<ApiResponse<RankingV1Dto.RankingsResponse>>() {},
+        )
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
+        val content = response.body!!.data!!.content
+        assertThat(content.map { it.productId }).containsExactly(first, second)
+        assertThat(content.map { it.rank }).containsExactly(1L, 2L)
+        assertThat(content.first().score).isEqualTo(9.9)
+        assertThat(content.first().brandName).isEqualTo("나이키")
+        assertThat(content.first().name).isEqualTo("A")
+    }
+
+    @Test
+    @DisplayName("period=MONTHLY 는 date 가 속한 달의 MV 에서 조회한다")
+    fun returnsMonthlyRankingFromMv() {
+        val brandId = brandRepository.save(BrandFixture.validBrand("나이키")).id
+        val product = productRepository.save(ProductFixture.validProduct(name = "A", brandId = brandId)).id
+        seedMv("mv_product_rank_monthly", "202607", 1, product, 7.0)
+
+        val response = testRestTemplate.exchange(
+            "/api/v1/rankings?period=monthly&date=20260721",
+            HttpMethod.GET,
+            null,
+            object : ParameterizedTypeReference<ApiResponse<RankingV1Dto.RankingsResponse>>() {},
+        )
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(response.body!!.data!!.content.map { it.productId }).containsExactly(product)
+        assertThat(response.body!!.data!!.totalElements).isEqualTo(1L)
+    }
+
+    @Test
+    @DisplayName("주간 MV 에 있으나 삭제된 상품은 목록에서 제외된다")
+    fun weeklyRankingSkipsMissingProduct() {
+        val brandId = brandRepository.save(BrandFixture.validBrand("나이키")).id
+        val alive = productRepository.save(ProductFixture.validProduct(name = "A", brandId = brandId)).id
+        seedMv("mv_product_rank_weekly", "2026W30", 1, alive, 9.9)
+        // 존재하지 않는 상품 — 조립에서 스킵된다.
+        seedMv("mv_product_rank_weekly", "2026W30", 2, 999_999L, 5.0)
+
+        val response = testRestTemplate.exchange(
+            "/api/v1/rankings?period=WEEKLY&date=20260721",
+            HttpMethod.GET,
+            null,
+            object : ParameterizedTypeReference<ApiResponse<RankingV1Dto.RankingsResponse>>() {},
+        )
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(response.body!!.data!!.content.map { it.productId }).containsExactly(alive)
     }
 
     @Test
