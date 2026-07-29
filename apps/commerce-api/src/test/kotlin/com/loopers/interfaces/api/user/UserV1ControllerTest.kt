@@ -12,6 +12,7 @@ import com.loopers.application.user.result.SignupResult
 import com.loopers.domain.user.UserErrorType
 import com.loopers.domain.user.UserFixture
 import com.loopers.interfaces.api.ApiControllerAdvice
+import com.loopers.interfaces.api.auth.AuthUser
 import com.loopers.interfaces.api.auth.LoginUser
 import com.loopers.support.error.CoreException
 import io.mockk.every
@@ -55,7 +56,7 @@ class UserV1ControllerTest {
             mavContainer: ModelAndViewContainer?,
             webRequest: NativeWebRequest,
             binderFactory: WebDataBinderFactory?,
-        ): Any = UserFixture.DEFAULT_LOGIN_ID
+        ): Any = AuthUser(id = 1L, loginId = UserFixture.DEFAULT_LOGIN_ID)
     }
 
     private val mockMvc: MockMvc = MockMvcBuilders.standaloneSetup(controller)

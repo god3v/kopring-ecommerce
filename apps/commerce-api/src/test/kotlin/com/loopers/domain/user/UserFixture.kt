@@ -15,5 +15,13 @@ object UserFixture {
         name: String = DEFAULT_NAME,
         birthDate: LocalDate = DEFAULT_BIRTH_DATE,
         email: String = DEFAULT_EMAIL,
-    ): User = User.signUp(loginId, Password.create(password, birthDate), name, birthDate, email)
+        id: Long = 0L,
+    ): User = User(
+        id = id,
+        loginId = loginId,
+        password = Password.create(password, birthDate),
+        name = name,
+        birthDate = birthDate,
+        email = Email.of(email),
+    )
 }

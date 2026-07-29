@@ -7,6 +7,7 @@ import com.loopers.support.error.CommonErrorType
 import com.loopers.support.error.CoreException
 import com.loopers.support.error.ErrorType
 import org.slf4j.LoggerFactory
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MissingServletRequestParameterException
@@ -105,6 +106,13 @@ class ApiControllerAdvice {
         return failureResponse(errorType = CommonErrorType.NOT_FOUND)
     }
 
+    // 선조회를 통과한 동시 요청이 DB 유니크/무결성 제약에 걸리는 드문 경합을 409 로 정규화한다.
+    @ExceptionHandler
+    fun handleConflict(e: DataIntegrityViolationException): ResponseEntity<ApiResponse<*>> {
+        log.warn("DataIntegrityViolationException : {}", e.message)
+        return failureResponse(errorType = CommonErrorType.CONFLICT)
+    }
+
     @ExceptionHandler
     fun handle(e: Throwable): ResponseEntity<ApiResponse<*>> {
         log.error("Exception : {}", e.message, e)
@@ -115,6 +123,6 @@ class ApiControllerAdvice {
     private fun failureResponse(errorType: ErrorType, errorMessage: String? = null): ResponseEntity<ApiResponse<*>> =
         ResponseEntity(
             ApiResponse.fail(errorCode = errorType.code, errorMessage = errorMessage ?: errorType.message),
-            errorType.status,
+            errorType.status.toHttpStatus(),
         )
 }

@@ -1,9 +1,7 @@
 package com.loopers.support.error
 
-import org.springframework.http.HttpStatus
-
 interface ErrorType {
-    val status: HttpStatus
+    val status: ErrorStatus
     val code: String
     val message: String
 }

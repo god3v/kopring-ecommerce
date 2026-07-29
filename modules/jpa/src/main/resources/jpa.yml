@@ -8,6 +8,11 @@ spring:
     properties:
       hibernate:
         default_batch_fetch_size: 100
+        # saveAll 의 다건 UPDATE 를 JDBC 배치로 묶는다. (datasource.rewriteBatchedStatements=true 와 짝)
+        # id 전략이 IDENTITY 라 INSERT 는 배치되지 않지만, UPDATE 배치는 정상 동작한다.
+        jdbc.batch_size: 50
+        order_inserts: true
+        order_updates: true
         timezone.default_storage: NORMALIZE_UTC
         jdbc.time_zone: UTC
 

@@ -2,6 +2,7 @@ package com.loopers.interfaces.api.user
 
 import com.loopers.application.user.UserFacade
 import com.loopers.interfaces.api.ApiResponse
+import com.loopers.interfaces.api.auth.AuthUser
 import com.loopers.interfaces.api.auth.LoginUser
 import com.loopers.interfaces.api.auth.RequireAuth
 import org.springframework.web.bind.annotation.GetMapping
@@ -27,9 +28,9 @@ class UserV1Controller(
     @GetMapping("/me")
     @RequireAuth
     override fun getMyInfo(
-        @LoginUser loginId: String,
+        @LoginUser user: AuthUser,
     ): ApiResponse<UserV1Dto.MyInfoResponse> {
-        return userFacade.getMyInfo(loginId)
+        return userFacade.getMyInfo(user.loginId)
             .let { UserV1Dto.MyInfoResponse.from(it) }
             .let { ApiResponse.success(it) }
     }
@@ -37,10 +38,10 @@ class UserV1Controller(
     @PatchMapping("/me/password")
     @RequireAuth
     override fun changePassword(
-        @LoginUser loginId: String,
+        @LoginUser user: AuthUser,
         @RequestBody request: UserV1Dto.ChangePasswordRequest,
     ): ApiResponse<Any> {
-        userFacade.changePassword(request.toCommand(loginId))
+        userFacade.changePassword(request.toCommand(user.loginId))
         return ApiResponse.success()
     }
 }

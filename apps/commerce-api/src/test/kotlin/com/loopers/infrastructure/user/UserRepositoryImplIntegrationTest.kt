@@ -1,11 +1,13 @@
 package com.loopers.infrastructure.user
 
+import com.loopers.domain.user.UserRepository
 import com.loopers.config.jpa.DataSourceConfig
 import com.loopers.domain.user.Password
 import com.loopers.domain.user.PasswordEncryptionUtil
 import com.loopers.domain.user.User
+import com.loopers.domain.user.UserErrorType
 import com.loopers.domain.user.UserFixture
-import com.loopers.domain.user.UserRepository
+import com.loopers.support.error.CoreException
 import com.loopers.testcontainers.MySqlTestContainersConfig
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
@@ -86,9 +88,9 @@ class UserRepositoryImplIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("DB 에 존재하지 않는 id 로 update 하면, IllegalStateException 이 발생한다.")
+        @DisplayName("DB 에 존재하지 않는 id 로 update 하면, UNAUTHORIZED 예외가 발생한다.")
         @Test
-        fun throwsIllegalState_whenUpdatingNonExistentId() {
+        fun throwsUnauthorized_whenUpdatingNonExistentId() {
             // give
             val template = UserFixture.validUser()
             val ghost = User(
@@ -101,9 +103,10 @@ class UserRepositoryImplIntegrationTest @Autowired constructor(
             )
 
             // when / then
-            assertThrows<IllegalStateException> {
+            val ex = assertThrows<CoreException> {
                 userRepository.update(ghost)
             }
+            assertThat(ex.errorType).isEqualTo(UserErrorType.UNAUTHORIZED)
         }
     }
 
@@ -122,12 +125,13 @@ class UserRepositoryImplIntegrationTest @Autowired constructor(
             val found = userRepository.findByLoginId(UserFixture.DEFAULT_LOGIN_ID)
 
             // then
+            assertThat(found).isNotNull()
+            val verifiedFound = requireNotNull(found) { "expected User but was null after save" }
             assertAll(
-                { assertThat(found).isNotNull() },
-                { assertThat(found!!.id).isEqualTo(saved.id) },
-                { assertThat(found!!.loginId).isEqualTo(UserFixture.DEFAULT_LOGIN_ID) },
-                { assertThat(found!!.email.value).isEqualTo(UserFixture.DEFAULT_EMAIL) },
-                { assertThat(found!!.password.matches(UserFixture.DEFAULT_PASSWORD)).isTrue() },
+                { assertThat(verifiedFound.id).isEqualTo(saved.id) },
+                { assertThat(verifiedFound.loginId).isEqualTo(UserFixture.DEFAULT_LOGIN_ID) },
+                { assertThat(verifiedFound.email.value).isEqualTo(UserFixture.DEFAULT_EMAIL) },
+                { assertThat(verifiedFound.password.matches(UserFixture.DEFAULT_PASSWORD)).isTrue() },
             )
         }
 
@@ -157,10 +161,11 @@ class UserRepositoryImplIntegrationTest @Autowired constructor(
             val found = userRepository.findByEmail(UserFixture.DEFAULT_EMAIL)
 
             // then
+            assertThat(found).isNotNull()
+            val verifiedFound = requireNotNull(found) { "expected User but was null after save" }
             assertAll(
-                { assertThat(found).isNotNull() },
-                { assertThat(found!!.id).isEqualTo(saved.id) },
-                { assertThat(found!!.email.value).isEqualTo(UserFixture.DEFAULT_EMAIL) },
+                { assertThat(verifiedFound.id).isEqualTo(saved.id) },
+                { assertThat(verifiedFound.email.value).isEqualTo(UserFixture.DEFAULT_EMAIL) },
             )
         }
 

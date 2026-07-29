@@ -41,33 +41,33 @@ commerce-batch ─── modules:jpa     ── MySQL
 commerce-streamer ─ modules:kafka  ── Kafka
 ```
 
-## DDD 4계층 (commerce-api 기준)
+## 4계층 — 엄격 헥사고날 (commerce-api 기준)
 
 ```
 com.loopers
 ├── interfaces.api.<resource>    Controller · ApiSpec · Dto
-├── application.<usecase>        Facade · Command · Result (트랜잭션 경계)
-├── domain.<aggregate>           Model · Service · Repository(I) · 값객체 · 도메인예외
-├── infrastructure.<aggregate>   Entity · JpaRepository · RepositoryImpl
+├── application.<usecase>        Facade · Command · Result · port   ← outbound port
+├── domain.<aggregate>           Model · 값객체 · Service · Repository (I)
+├── infrastructure.<aggregate>   Entity · JpaRepository · RepositoryImpl          ← outbound adapter
 └── support.error                CoreException · ErrorType
 ```
 
 ### 의존 방향
 
 ```
-interfaces ──▶ application ──▶ domain ◀── infrastructure
+interfaces ──▶ application ──▶ domain
+                    ▲
+                    │ implements port
+                    │
+              infrastructure
 ```
 
-- `domain` 은 스프링/JPA 어노테이션을 직접 참조하지 않는 순수 Kotlin.
-- `infrastructure` 가 도메인의 `Repository` 인터페이스를 구현한다 (의존 역전).
+- `domain` 은 가장 안쪽 순수 모델. 도메인 규칙은 애그리거트(`User`) 메서드와 값객체(`Email`, `Password`, `PasswordPolicy`) 에 캡슐화한다.
+- `application` `Facade` 가 유스케이스를 조율한다.
+- `infrastructure` 는 outbound adapter. JPA / Redis / 외부 시스템으로 위임한다.
 - `interfaces` 는 요청 검증 + 응답 조립만 담당, 비즈니스 로직 금지.
-- `application.Facade` 가 유스케이스 진입점이며 `@Transactional` 경계를 명시적으로 잡는다.
-
-## 현재 도메인
-
-| 도메인 | 위치 | 비고 |
-|--------|------|------|
-| user | `domain.user` · `application.user` · `infrastructure.user` · `interfaces.api.user` | `Email` · `Password` 값객체, 회원가입 / 내정보 / 비밀번호 변경 |
+- `application.Facade` 가 유스케이스 진입점이며 `@Transactional` 경계와 Repository 호출 책임을 단일하게 소유한다.
+- 무상태 순수 도메인 헬퍼(`PasswordPolicy` · `OrderPriceCalculator` 같은 정책/계산기/스펙) 는 `domain` 에 둔다. 인자만 받아 계산·검증하고 Repository/Spring 어노테이션을 직접 참조하지 않는다.
 
 ## 프로필
 `local` (기본) · `test` (테스트 강제) · `dev` · `qa` · `prd`.

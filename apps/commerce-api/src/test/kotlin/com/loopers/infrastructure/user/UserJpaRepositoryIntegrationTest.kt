@@ -65,10 +65,11 @@ class UserJpaRepositoryIntegrationTest @Autowired constructor(
             val found = userJpaRepository.findByLoginId(UserFixture.DEFAULT_LOGIN_ID)
 
             // then
+            assertThat(found).isNotNull()
+            val verifiedFound = requireNotNull(found) { "expected UserEntity but was null after save" }
             assertAll(
-                { assertThat(found).isNotNull() },
-                { assertThat(found!!.id).isEqualTo(saved.id) },
-                { assertThat(found!!.loginId).isEqualTo(UserFixture.DEFAULT_LOGIN_ID) },
+                { assertThat(verifiedFound.id).isEqualTo(saved.id) },
+                { assertThat(verifiedFound.loginId).isEqualTo(UserFixture.DEFAULT_LOGIN_ID) },
             )
         }
 
@@ -99,10 +100,11 @@ class UserJpaRepositoryIntegrationTest @Autowired constructor(
             val found = userJpaRepository.findByEmail(UserFixture.DEFAULT_EMAIL)
 
             // then
+            assertThat(found).isNotNull()
+            val verifiedFound = requireNotNull(found) { "expected UserEntity but was null after save" }
             assertAll(
-                { assertThat(found).isNotNull() },
-                { assertThat(found!!.id).isEqualTo(saved.id) },
-                { assertThat(found!!.email).isEqualTo(UserFixture.DEFAULT_EMAIL) },
+                { assertThat(verifiedFound.id).isEqualTo(saved.id) },
+                { assertThat(verifiedFound.email).isEqualTo(UserFixture.DEFAULT_EMAIL) },
             )
         }
 
